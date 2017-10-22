@@ -1,34 +1,37 @@
 # import the necessary packages
 import argparse
 import datetime
-import imutils
 import time
 import cv2
+import numpy as np
 
 camera = cv2.VideoCapture(0)
-time.sleep(0.25)
+camera = cv2.VideoCapture("C:\\Users\\Richard\\Pictures\\Camera Roll\\WIN_20171021_14_35_55_Pro.mp4")
 
-lastFrame = None
+prev = None
 composite = None
 timeOfLastMotion = None
 
 fgbg = cv2.createBackgroundSubtractorMOG2(detectShadows=False)
+kernel = np.ones((5,5), np.uint8)
 
 while True:
 
-    grabbed, original = camera.read()
-    thisFrame = cv2.cvtColor(original, cv2.COLOR_BGR2GRAY)
-    thisFrame = cv2.GaussianBlur(thisFrame, (21, 21), 0)
+    original = camera.read()[1]
+    original = cv2.resize(original, (640, 480), interpolation=cv2.INTER_AREA)
 
-    #thisFrame = imutils.resize(thisFrame, width=500)
+    current = original.copy()
+    #current = cv2.GaussianBlur(current, (21, 21), 0)
 
-    if lastFrame is None:
-        lastFrame = thisFrame.copy()
+    current = cv2.cvtColor(current, cv2.COLOR_BGR2GRAY)
+
+    if prev is None:
+        prev = current.copy()
 
     if composite is None:
-        composite = thisFrame.copy()
+        composite = current.copy()
 
-    delta = cv2.absdiff(thisFrame, lastFrame)
+    delta = cv2.absdiff(current, prev)
     thresh = cv2.threshold(delta, 3, 255, cv2.THRESH_BINARY)[1]
     dilate = cv2.dilate(thresh, None, iterations=1)
 
@@ -53,9 +56,10 @@ while True:
 
     if not frameHasMotion:
         if timeOfLastMotion is None or time.time() - timeOfLastMotion > 5:
-            composite = cv2.addWeighted(composite, 0.95, thisFrame, 0.05, 0)
+            composite = cv2.addWeighted(composite, 0.95, current, 0.05, 0)
+    composite = cv2.addWeighted(composite, 0.95, current, 0.05, 0)
 
-    compDelta = cv2.absdiff(thisFrame, composite)
+    compDelta = cv2.absdiff(current, composite)
     cv2.imshow('compDelta', compDelta)
     compThresh = cv2.threshold(compDelta, 20, 255, cv2.THRESH_BINARY)[1]
     cv2.imshow('compThresh', compThresh)
@@ -70,20 +74,22 @@ while True:
     cv2.imshow('compCnt', compCnt)
 
     fgmask = fgbg.apply(original)
+
+    erodedMask = cv2.erode(fgmask, kernel, iterations = 1)
+
     bg = fgbg.getBackgroundImage()
     cv2.imshow('fgmask', fgmask)
     cv2.imshow('bg', bg)
+    cv2.imshow('erodedMask', erodedMask)
 
-    cv2.imshow('this', thisFrame)
-    #cv2.imshow('delta', delta)
-    #cv2.imshow('thresh', thresh)
-    #cv2.imshow('dialate', dilate)
+    cv2.imshow('camera', original)
+    cv2.imshow('current', current)
     cv2.imshow('cnt', cnt)
     cv2.imshow('composite', composite)
 
-    cv2.waitKey(100)
+    cv2.waitKey(1)
 
-    lastFrame = thisFrame.copy()
+    prev = current
 
 camera.release()
 cv2.destroyAllWindows()
